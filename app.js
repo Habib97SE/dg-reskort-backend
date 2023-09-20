@@ -4,8 +4,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const app = express();
 
-const mongoDBURI =
-  "mongodb+srv://habib:RAQry1Yjw9NV3dLW@cluster0.k1wy3nw.mongodb.net/?retryWrites=true&w=majority";
+const mongoDBURI = process.env.MONGO_DB_URI;
 
 mongoose
   .connect(mongoDBURI)
