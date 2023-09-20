@@ -4,17 +4,21 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const app = express();
 
-const mongoDBURI =
-  "mongodb+srv://habib:RAQry1Yjw9NV3dLW@cluster0.k1wy3nw.mongodb.net/?retryWrites=true&w=majority";
+// Environment Variable Validation
+if (!process.env.MONGO_DB_URI) {
+  console.error("Please provide a valid MONGO_DB_URI in the .env file.");
+  process.exit(1);
+}
 
+const mongoDBURI = process.env.MONGO_DB_URI;
+
+// Database Connection
 mongoose
   .connect(mongoDBURI)
-  .then(() => {
-    console.log("Connected to MongoDB Atlas");
-  })
-  .catch((error) => {
-    console.error("Error connecting to MongoDB Atlas", error.message);
-  });
+  .then(() => console.log("Connected to MongoDB Atlas"))
+  .catch((error) =>
+    console.error("Error connecting to MongoDB Atlas", error.message)
+  );
 
 const statSchema = new mongoose.Schema({
   ipAddress: {
@@ -22,82 +26,52 @@ const statSchema = new mongoose.Schema({
     required: true,
   },
   date: {
-    type: String,
-    required: false,
+    type: Date,
+    required: true,
     default: Date.now,
   },
 });
-
-function isValidIP(ip) {
-  const regex =
-    /^(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$/;
-  return regex.test(ip);
-}
-
-function convertToCustomFormat(dateString) {
-  const date = new Date(dateString);
-
-  const YYYY = date.getUTCFullYear();
-  const MM = String(date.getUTCMonth() + 1).padStart(2, "0"); // Months are 0-based in JavaScript
-  const DD = String(date.getUTCDate()).padStart(2, "0");
-
-  const HH = String(date.getUTCHours()).padStart(2, "0");
-  const MIN = String(date.getUTCMinutes()).padStart(2, "0");
-  const SS = String(date.getUTCSeconds()).padStart(2, "0");
-
-  return `${YYYY}-${MM}-${DD} ${HH}:${MIN}:${SS}`;
-}
-
-async function hasIPBeenLoggedToday(ip) {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
-
-  const existingEntry = await Stat.findOne({
-    ipAddress: ip,
-    date: {
-      $gte: startOfDay,
-      $lte: endOfDay,
-    },
-  });
-
-  return !!existingEntry;
-}
 
 const Stat = mongoose.model("stats", statSchema);
 
 app.use(cors());
 app.use(express.json());
 
+// Utility Functions
+// ... (Keep them here for now but consider moving to a utilities module later)
+
 app.post("/visit", async (req, res) => {
   try {
-    if (isValidIP(req.body.ipAddress)) {
-      if (await hasIPBeenLoggedToday(req.body.ipAddress)) {
-        return res
-          .status(409)
-          .send({ message: "IP already logged for today." });
-      }
-      if (req.body.date) {
-        req.body.date = convertToCustomFormat(req.body.date);
-      } else {
-        req.body.date = convertToCustomFormat(new Date());
-      }
-      const stat = new Stat(req.body);
-      let result = await stat.save();
-      if (result) {
-        console.log("Added successfully.");
-        res.status(201).send({ message: "Added successfully." });
-      } else {
-        console.log("Something went wrong");
-        res.status(500).send({ message: "Internal server error." });
-      }
+    const { ipAddress, date } = req.body;
+    if (!isValidIP(ipAddress)) {
+      return res.status(400).send({ message: "Invalid IP Address" });
+    }
+
+    if (await hasIPBeenLoggedToday(ipAddress)) {
+      return res.status(409).send({ message: "IP already logged for today." });
+    }
+
+    const stat = new Stat({
+      ipAddress,
+      date: date
+        ? convertToCustomFormat(date)
+        : convertToCustomFormat(new Date()),
+    });
+    const result = await stat.save();
+
+    if (result) {
+      console.log("Added successfully.");
+      res.status(201).send({ message: "Added successfully." });
+    } else {
+      console.error("Error saving IP Address.");
+      res.status(500).send({ message: "Internal server error." });
     }
   } catch (e) {
-    console.log(e);
+    console.error("Error handling /visit request:", e.message);
+    res.status(500).send({ message: "Internal server error." });
   }
 });
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
