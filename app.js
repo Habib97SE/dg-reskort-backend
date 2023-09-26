@@ -10,6 +10,25 @@ if (!process.env.MONGO_DB_URI) {
   process.exit(1);
 }
 
+const convertToCustomFormat = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+
+  return `${year}-${month}-${day}`;
+};
+
+const hasIPBeenLoggedToday = async (ipAddress) => {
+  const today = convertToCustomFormat(new Date());
+  const result = await Stat.find({ ipAddress, date: today });
+  return result.length > 0;
+};
+
+const isValidIP = (ipAddress) => {
+  const ipRegex = /(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.|$)){4}/g;
+  return ipAddress.match(ipRegex);
+};
+
 const mongoDBURI = process.env.MONGO_DB_URI;
 
 // Database Connection
